@@ -7,6 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/OsGift/go-api-gateway/internal/middleware"
 	"github.com/fasthttp/router"
 	"github.com/valyala/fasthttp"
 )
@@ -67,7 +68,7 @@ func main() {
 	loadRoutes() // Load routes from YAML
 
 	r := router.New()
-	r.GET("/{proxyPath:*}", reverseProxyHandler)
+	r.GET("/{proxyPath:*}", middleware.RateLimitMiddleware(reverseProxyHandler))
 
 	server := &fasthttp.Server{
 		Handler: r.Handler,
