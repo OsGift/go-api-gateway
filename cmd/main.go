@@ -3,18 +3,59 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/fasthttp/router"
 	"github.com/valyala/fasthttp"
 )
 
+type Route struct {
+	Path    string `yaml:"path"`
+	Backend string `yaml:"backend"`
+}
+
+type Config struct {
+	Routes []Route `yaml:"routes"`
+}
+
+var routeMap = make(map[string]string)
+
+func loadRoutes() {
+	data, err := os.ReadFile("config/routes.yaml")
+	if err != nil {
+		log.Fatal("Failed to read config file:", err)
+	}
+
+	var config Config
+	err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		log.Fatal("Failed to parse YAML:", err)
+	}
+
+	for _, route := range config.Routes {
+		routeMap[route.Path] = route.Backend
+	}
+
+	fmt.Println("Routes loaded:", routeMap)
+}
+
 func reverseProxyHandler(ctx *fasthttp.RequestCtx) {
-	// Forward request to backend service (hardcoded for now)
-	// backendURL := "http://localhost:8081"
+	path := string(ctx.Path())
+
+	backend, exists := routeMap[path]
+	if !exists {
+		ctx.SetStatusCode(fasthttp.StatusNotFound)
+		ctx.SetBody([]byte("Route not found"))
+		return
+	}
+
 	req := &ctx.Request
 	resp := &ctx.Response
 
-	// Proxy request
+	req.SetRequestURI(backend + path) // Forward request
+
 	err := fasthttp.Do(req, resp)
 	if err != nil {
 		ctx.SetStatusCode(fasthttp.StatusServiceUnavailable)
@@ -23,6 +64,8 @@ func reverseProxyHandler(ctx *fasthttp.RequestCtx) {
 }
 
 func main() {
+	loadRoutes() // Load routes from YAML
+
 	r := router.New()
 	r.GET("/{proxyPath:*}", reverseProxyHandler)
 
